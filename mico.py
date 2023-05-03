@@ -8,18 +8,23 @@ Find and process MIDI files.
 # == imports ==
 import sys, argparse, os, re
 import mido
-from util import Bunch, as_list, collect_files
+import util
 
 # == CONFIG ==
-CONFIG = Bunch (
+CONFIG = util.Bunch (
   dump = "",
   extension = [],
   collect = [],
   verbose = 0,
 )
 
+# == collect ==
+# Collect files recursively under `root`, filtered by matching `extension`.
+def collect (root, extension = None):
+  return sorted (util.collect_files (root, extension))
+
 # == parse_options ==
-def parse_options ():
+def _parse_options ():
   p = argparse.ArgumentParser (description = __doc__)
   a = p.add_argument
   a ('--dump', type = str, default = CONFIG.dump, help = "Dump MIDI file events")
@@ -32,12 +37,12 @@ def parse_options ():
 # == main ==
 def _main (argv):
   global CONFIG, midi_files, dataset_base, dataset_csv, dataset_hdf5
-  CONFIG = parse_options()
+  CONFIG = _parse_options()
   if CONFIG.dump:
     print (mido.MidiFile (CONFIG.dump, clip = True))
     sys.exit (0)
   elif CONFIG.collect:
-    print ('\n'.join (collect_files (CONFIG.collect, CONFIG.extension)))
+    print ('\n'.join (collect (CONFIG.collect, CONFIG.extension)))
     sys.exit (0)
   print (__doc__)
   sys.exit (0)
