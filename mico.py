@@ -2,7 +2,7 @@
 # This Source Code Form is licensed MPL-2.0: http://mozilla.org/MPL/2.0
 
 """
-Usage: mico.py [--dump midifile]
+Find and process MIDI files.
 """
 
 # == imports ==
