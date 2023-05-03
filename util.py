@@ -9,6 +9,13 @@ class Bunch: # simplified object notation
   def __str__ (self):
     return str (vars (self))
 
+# == as_list ==
+def as_list (arg):
+  if (hasattr (arg, 'capitalize') or    # string-like
+      not hasattr (arg, '__iter__')):   # non iterable
+    return [ arg ]                      # wrap
+  return list (arg)                     # convert
+
 # == collect_files ==
 def collect_files (where, extension = None):
   # match extension(s)
