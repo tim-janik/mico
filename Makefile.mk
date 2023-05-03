@@ -12,5 +12,13 @@ CFLAGS		 += $(INCLUDES) $(CCFLAGS) $(OPTIMIZE)
 CXXFLAGS	 += $(INCLUDES) $(CCFLAGS) $(OPTIMIZE)
 
 
+# == check-mico-collect ==
+check-mico-collect:
+	$(QGEN)
+	$Q (set -x ; \
+		./mico.py --collect . --extension .py | grep 'mico.py' \
+	) > $@.log 2>&1 || { echo "$@: error: see $@.log:" >&2; cat $@.log ; false ; }
+check: check-mico-collect
+
 # == all ==
 all: $(ALL_TARGETS)
