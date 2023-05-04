@@ -237,3 +237,24 @@ def reduce_polypony (origtune):
       tune[i,:] = note
     i += 1
   return tune
+
+# == contiguous_notes ==
+# Closely line up the notes, stripping pauses and remove Staccato.
+def contiguous_notes (origtune, min_duration, max_duration):
+  tune = np.copy (origtune)
+  last_duration = 1
+  L = len (tune)
+  if L:
+    tune[0][2] = 0
+  for i, (p0,d,s0) in enumerate (tune):
+    d = max (min_duration, min (d, max_duration))               # Constrain duration
+    nxt = i + 1
+    if nxt < L and d < tune[nxt][2]:
+      gap = tune[nxt][2] - d
+      while gap >= 4:                                           # TODO: use 3, depending on signature
+        tune[nxt][2] -= 4                                       # Bring forward, removes pause (TODO:sig)
+        gap = tune[nxt][2] - d
+      d = tune[nxt][2]                                          # Fill duration, remove Staccato
+    tune[i][1] = d
+    last_duration = d
+  return tune
