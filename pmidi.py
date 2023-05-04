@@ -172,6 +172,102 @@ def tune_stats (tune):
                 tonica = tonica,
                 semitones = semitones)
 
+# == VoiceOffAllocator ==
+class VoiceOffAllocator:
+  def __init__ (self):
+    self.chvoices = [ {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {} ] # 16
+    self.pos = -1
+  def tick_before_list (self, tick, flist, gap = 0):
+    for offtick in flist:
+      if tick <= offtick + gap:
+        return True
+    return False
+  def check (self, channel, pitch, tick):
+    chdict = self.chvoices[channel]
+    allocs = chdict.get (pitch, [])
+    return self.tick_before_list (tick, allocs)
+  def add_offtick (self, channel, pitch, offtick, ontick, exclusive = False):
+    chdict = self.chvoices[channel]
+    allocs = chdict.get (pitch, None)
+    if not allocs:
+      chdict[pitch] = allocs = []
+    multi = ontick <= offtick
+    multi += self.tick_before_list (ontick, allocs)
+    if multi > 1 and exclusive:
+      return False
+    allocs.append (offtick)
+    return True
+  def add_exclusive (self, channel, pitch, offtick, ontick):
+    return self.add_offtick (channel, pitch, offtick, ontick, exclusive = True)
+  def add_alt (self, channels, pitch, offtick, ontick):
+    for channel in channels:
+      if self.check (channel, pitch, ontick):
+        continue
+      ok = self.add_exclusive (channel, pitch, offtick, ontick)
+      assert ok
+      return channel
+    return -1
+
+# == create_midifile ==
+def create_midifile (filename, midinotes, bpm = None, verbose = False):
+  # create MIDI file, track, tempo
+  mid = mido.MidiFile()
+  mid.ticks_per_beat = 960
+  track = mido.MidiTrack()
+  mid.tracks.append (track)
+  if bpm:
+    track.append (mido.MetaMessage ('set_tempo', tempo = mido.bpm2tempo (bpm)))
+  messages = []
+  qtime = 0
+  # create ON + OFF with abs time, check voice allocations
+  alt_channels = [1,2,3,4,5,6,7,8, 10,11,12,13,14,15] # skip drum channel
+  chvoices = VoiceOffAllocator()
+  for mn in midinotes:
+    vpitch, qlen, step = mn
+    qtime += float (step)
+    channel = 0
+    pitch = round (vpitch)
+    ontick = round (qtime * mid.ticks_per_beat)
+    offtick = max (ontick + 1, round ((qtime + qlen) * mid.ticks_per_beat))
+    ok = chvoices.add_exclusive (channel, pitch, offtick, ontick)
+    if not ok:
+      channel = chvoices.add_alt (alt_channels, pitch, offtick, ontick)
+      if channel < 0:
+        print ("Lacking voice for note:", pitch, offtick - ontick, ontick)
+        channel = 0
+        continue
+    md = { 'channel': channel, 'note': pitch, 'type': 'note_on', 'velocity': 127, 'time': ontick }
+    messages.append (md)
+    md = { 'channel': channel, 'note': pitch, 'type': 'note_off', 'velocity': 0, 'time': offtick }
+    messages.append (md)
+    channel = 0
+  # sort by tick, OFF before ON, velocity 0 first
+  messages = sorted (messages, key = lambda md: (md['time'], md['type'], md['velocity']))
+  # create delta times
+  mtime = 0
+  for md in messages:
+    md['time'] -= mtime
+    mtime += md['time']
+  # count voice allocations
+  if verbose:
+    chvoices = [ {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {} ] # 16
+    maxtones = 0
+    for md in messages:
+      ckey = md['channel']
+      pkey = md['note'] # pitch
+      if md['type'] == 'note_off':
+        chvoices[ckey][pkey] -= 1
+      if md['type'] == 'note_on':
+        chvoices[ckey][pkey] = chvoices[ckey].get (pkey, 0) + 1
+        maxtones = max (maxtones, chvoices[ckey][pkey])
+    print (f"{filename}: max voice allocs:", maxtones)
+  # turn events into mido.Message
+  for md in messages:
+    mtype = md['type']
+    del md['type']
+    track.append (mido.Message (mtype, **md))
+  mid.save (filename)
+
 # == gm_instrument_name ==
 def gm_instrument_name (i):
   return GENERAL_MIDI_LEVEL1_INSTRUMENT_PATCH_MAP[i] if i >= 0 and i <= 127 else ''
