@@ -17,7 +17,7 @@ def as_list (arg):
   return list (arg)                     # convert
 
 # == collect_files ==
-def collect_files (where, extension = None):
+def collect_files (where, extension = None, followlinks = True):
   # match extension(s)
   extensions = tuple (as_list (extension)) if extension else None
   def matches (path):
@@ -28,7 +28,7 @@ def collect_files (where, extension = None):
   collected = []
   for path in as_list (where):
     if os.path.isdir (path):
-      for dirpath, dirnames, filenames in os.walk (path):
+      for dirpath, dirnames, filenames in os.walk (path, followlinks = followlinks):
         for filename in filenames:
           if matches (filename):
             collected.append (os.path.join (dirpath, filename))
