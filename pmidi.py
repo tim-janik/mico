@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # This Source Code Form is licensed MPL-2.0: http://mozilla.org/MPL/2.0
+import os, subprocess, tempfile
 import collections, mido
 import numpy as np
 from util import Bunch
@@ -268,3 +269,28 @@ def transpose_to_c (origtune):
       if pitch > 127: pitch -= 12                               # constrain to MIDI range
       tune[i][0] = pitch
   return tune
+
+# == pds_array ==
+# Convert `tones` into a numpy.array with `(pitch, duration, step)` elements.
+def pds_array (tones):
+  tones = np.array (tones)
+  if tones.shape[1] == 2:                                       # need to add step to note + duration
+    assert 0
+    tones = np.pad (tones, ((0,0),(0,1)), constant_values = 0)  # (None,2) -> (None,3)
+    ld = 0
+    for i,(p,d,s) in enumerate (tones):
+      tones[i][2] = ld                                          # assign last duration to following step
+      ld = d
+  return tones
+
+# == play_notes ==
+def play_notes (notes, bpm = 120, verbose = False):
+  notes = pds_array (notes)
+  tmpfile = tempfile.NamedTemporaryFile (prefix = 'pmidi.', suffix = '.mid', delete = False)
+  tmpfile.close()
+  tmpmid = tmpfile.name
+  create_midifile (tmpmid, notes, bpm, verbose)
+  try:
+    subprocess.run (['timidity', '-ia', tmpmid])
+  finally:
+    os.unlink (tmpmid)
