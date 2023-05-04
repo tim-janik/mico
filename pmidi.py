@@ -335,9 +335,9 @@ GENERAL_MIDI_LEVEL1_INSTRUMENT_PATCH_MAP = [
   "Guitar Fret Noise", "Breath Noise", "Seashore", "Bird Tweet", "Telephone Ring", "Helicopter", "Applause", "Gunshot",
 ]
 
-# == reduce_polypony ==
+# == monophonic_notes ==
 # Reduce polyphonic notes by removing notes to retain a monophonic tune.
-def reduce_polypony (origtune):
+def monophonic_notes (origtune):
   tune = np.copy (origtune)
   i = 0                                         # position to search for polyphony
   while i < len (tune):
