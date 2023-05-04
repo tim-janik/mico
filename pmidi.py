@@ -172,6 +172,32 @@ def tune_stats (tune):
                 tonica = tonica,
                 semitones = semitones)
 
+# == plot_pitch_hist ==
+def plot_pitch_hist (splt, tune):
+  tc, pitches = pitch_stats (tune)
+  tstats = tune_stats (tune)
+  for o in np.arange (11) * 12:
+    splt.axvline (x = o, linestyle = ':', color = "#dddddd")
+  splt.axhline (y = tstats.avg_occurrence, linestyle = '--', color = "#75bcfe")
+  splt.axvline (x = tstats.avg_note, linestyle = '--', color = "#75bcfe")
+  splt.set_xlabel ("MIDI Pitch")
+  splt.set_ylabel ("Occurrence of Pitches")
+  splt.hist (pitches, bins = range (128 + 1))
+
+# == plot_semitone_hist ==
+def plot_semitone_hist (splt, tune):
+  semitones = [p % 12 for p,d,s in tune]
+  splt.set_xlabel ("Semitones")
+  splt.set_xticks (np.arange (13),
+                   ("       | 0 C", "      1 C#", "     2 D", "      3 D#", "     4 E", "     5 F",
+                    "      6 F#", "     7 G", "      8 G#", "     9 A", "        10 A#", "      11 B",
+                    "|"))
+  splt.set_ylabel ("Occurrence of Semitones")
+  for o in range (12):
+    color = "#333333" if o in [1, 3, 6, 8, 10] else "#dddddd"
+    splt.axvline (x = o + 0.5, linestyle = ':', linewidth = 2, color = color)
+  splt.hist (semitones, bins = range (12 + 1), rwidth = 0.92)
+
 # == VoiceOffAllocator ==
 class VoiceOffAllocator:
   def __init__ (self):
