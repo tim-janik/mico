@@ -20,5 +20,14 @@ check-mico-collect:
 	) > $@.log 2>&1 || { echo "$@: error: see $@.log:" >&2; cat $@.log ; false ; }
 check: check-mico-collect
 
+# == check-bach-parsing ==
+check-bach-parsing:
+	$(QGEN)
+	$Q (set -x ; \
+		./mico.py --collect bach/ --extension .mid --parse-collected --reduce-polypony --contiguous-notes --transpose-to-c \
+		| grep '60\..*0\.5' \
+	) > $@.log 2>&1 || { echo "$@: error: see $@.log:" >&2; cat $@.log ; false ; }
+check: check-bach-parsing
+
 # == all ==
 all: $(ALL_TARGETS)
