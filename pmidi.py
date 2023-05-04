@@ -73,6 +73,45 @@ class NoteCollection:
     if deduped and verbose:
       print ("deduped %d notes" % deduped)
 
+# == filter_melody ==
+def filter_melody (note):
+  if note.channel == 9: # MIDI Drums are on Channel 10
+    return False
+  if note.program >= 112 and note.program < 120: # Drums
+    return False
+  # TODO: skip 96 ... 103 ?
+  return True
+
+# == notes_to_vector
+def notes_to_vector (midi_notes, verbose):
+  notes = []
+  nnotes, nchords, prevstep = 0, 0, 0
+  def add_note (mpitch, qlen, step):
+    nonlocal nnotes, nchords, prevstep
+    # while mpitch < minfold: mpitch += 12
+    # while mpitch > maxfold: mpitch -= 12
+    notes.append ((mpitch, qlen, step))
+    nnotes += step != 0
+    nchords += step == 0 and prevstep > 0
+    prevstep = step
+  ticks_per_beat = midi_notes[0].notecollection.ticks_per_beat if midi_notes else 0
+  last_tick = 0
+  iprograms = set()
+  for nn in midi_notes:
+    iprograms.add (nn.program)
+    step = nn.tick - last_tick
+    # assert step >= 0
+    last_tick = nn.tick
+    add_note (nn.pitch, nn.quarter_length (nn.duration), nn.quarter_length (step))
+    if 0:
+      print ('%snote' % ('' if step > 0 else '  '), nn.pitch, nn.duration,
+             '[%u' % nn.program, GENERAL_MIDI_LEVEL1_INSTRUMENT_PATCH_MAP[nn.program] + ']',
+             notes[-1])
+  if verbose:
+    for p in iprograms:
+      print ("MIDI Program: Used:", p, GENERAL_MIDI_LEVEL1_INSTRUMENT_PATCH_MAP[p])
+  return nnotes - nchords, nchords, np.array (notes, dtype = np.float32)
+
 # == analyze_midi ==
 def analyze_midi (mfile, iset, xset, dedup, verbose):
   iset, xset = set (iset), set (xset)
