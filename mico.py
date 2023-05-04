@@ -11,9 +11,13 @@ import numpy as np
 import pmidi, mido
 import util
 
+# == pmidi.py exports ==
+from pmidi import tune_stats, plot_pitch_hist, plot_semitone_hist, play_notes
+
 # == CONFIG ==
 CONFIG = util.Bunch (
   dump = "",
+  play = "",
   extension = [],
   collect = [],
   verbose = 0,
@@ -29,6 +33,7 @@ def _parse_options ():
   a = p.add_argument
   a ('--collect', default = CONFIG.collect, action = 'append', help = "Collect files recursively")
   a ('--dump', type = str, default = CONFIG.dump, help = "Dump MIDI file events")
+  a ('--play', type = str, default = CONFIG.play, help = "Play a MIDI file")
   a ('--parse-collected', default = CONFIG.parse_collected, action = 'store_true', help = "Dump collected files")
   a ('--reduce-polypony', default = CONFIG.reduce_polypony, action = 'store_true', help = "Dump collected files")
   a ('--contiguous-notes', default = CONFIG.contiguous_notes, action = 'store_true', help = "Dump collected files")
@@ -52,8 +57,6 @@ class MidiTune:
     s += ' notes.shape=' + str (self.notes.shape)
     s += '>'
     return s
-  def monophonic_notes (self):
-    return MidiTune ('', pmidi.reduce_polypony (self.notes))
   def contiguous_notes (self, min_duration = 1 / 8, max_duration = 99e99):
     return MidiTune ('', pmidi.contiguous_notes (self.notes, min_duration, max_duration))
   def reduce_polypony (self):
@@ -63,7 +66,7 @@ class MidiTune:
 
 # == parse_midis ==
 # Parse and yield a MidiTune object for one or many MIDI files.
-def parse_midi (filenames):
+def parse_midi (filenames, dedup = True):
   for filename in util.as_list (filenames):
     try:
       mfile = mido.MidiFile (filename, clip = True)
@@ -71,7 +74,7 @@ def parse_midi (filenames):
       print (f'{filename}: error:', repr (ex), file = sys.stderr)
       continue
     iset, xset = [], []
-    notes, attrs = pmidi.analyze_midi (mfile, iset, xset, dedup = False, verbose = CONFIG.verbose)
+    notes, attrs = pmidi.analyze_midi (mfile, iset, xset, dedup, verbose = CONFIG.verbose)
     tune = MidiTune (filename, notes, attrs)
     yield tune
 
@@ -83,11 +86,14 @@ def collect (root, extension = None):
 # == main ==
 def _main (argv):
   global CONFIG, midi_files, dataset_base, dataset_csv, dataset_hdf5
+  CONFIG.verbose = True
   CONFIG = _parse_options()
   if CONFIG.dump:
     print (mido.MidiFile (CONFIG.dump, clip = True))
-    sys.exit (0)
-  elif CONFIG.collect:
+  if CONFIG.play:
+    miditune = list (parse_midi (CONFIG.play))[0]
+    play_notes (miditune.notes, miditune.bpm, CONFIG.verbose)
+  if CONFIG.collect:
     collected = collect (CONFIG.collect, CONFIG.extension)
     if CONFIG.parse_collected:
       for tune in parse_midi (collected):
@@ -102,8 +108,8 @@ def _main (argv):
           print (tune.notes)
     else:
       print ('\n'.join (collected))
-    sys.exit (0)
-  print (__doc__)
+  else:
+    print (__doc__)
   sys.exit (0)
 if __name__ == "__main__":
   _main (sys.argv)
