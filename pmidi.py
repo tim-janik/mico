@@ -258,3 +258,19 @@ def contiguous_notes (origtune, min_duration, max_duration):
     tune[i][1] = d
     last_duration = d
   return tune
+
+# == transpose_to_c ==
+# Transpose tune to C4 or C5, whichever is closer
+def transpose_to_c (origtune):
+  tune = np.copy (origtune)
+  tstats = tune_stats (tune)
+  if tstats.tonica > 0:
+    octave = 0
+    if tstats.min_note < 127 - tstats.max_note:
+      octave = +12                                              # pick C5
+    for i,(p,d,s) in enumerate (tune):
+      pitch = p + octave - tstats.tonica                        # transpose into C4 or C5
+      if pitch < 0:   pitch += 12                               # constrain to MIDI range
+      if pitch > 127: pitch -= 12                               # constrain to MIDI range
+      tune[i][0] = pitch
+  return tune
