@@ -100,7 +100,7 @@ def notes_to_vector (midi_notes, verbose):
   for nn in midi_notes:
     iprograms.add (nn.program)
     step = nn.tick - last_tick
-    # assert step >= 0
+    assert step >= 0
     last_tick = nn.tick
     add_note (nn.pitch, nn.quarter_length (nn.duration), nn.quarter_length (step))
     if 0:
@@ -136,18 +136,10 @@ def analyze_midi (mfile, iset, xset, dedup, verbose):
   midi_notes = sorted (midi_notes, key = lambda nn: (nn.tick, nn.pitch, nn.channel, -nn.duration, nn.track))
   # create vector
   nnotes, nchords, npvec = notes_to_vector (midi_notes, verbose = verbose)
-  # minmax
-  notemin, notemax = 128, -1
-  for nv in npvec:
-    notemin = min (notemin, nv[0])
-    notemax = max (notemax, nv[0])
   # collect attrs
   attrs['bpm'] = nc.bpm
   attrs['nnotes'] = nnotes
   attrs['nchords'] = nchords
-  attrs['notemin'] = notemin
-  attrs['notemax'] = notemax
-  attrs['notespan'] = notemax - notemin + 1
   return npvec, attrs
 
 # == count_pitches ==
