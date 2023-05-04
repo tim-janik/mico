@@ -217,3 +217,23 @@ GENERAL_MIDI_LEVEL1_INSTRUMENT_PATCH_MAP = [
   # 120
   "Guitar Fret Noise", "Breath Noise", "Seashore", "Bird Tweet", "Telephone Ring", "Helicopter", "Applause", "Gunshot",
 ]
+
+# == reduce_polypony ==
+# Reduce polyphonic notes by removing notes to retain a monophonic tune.
+def reduce_polypony (origtune):
+  tune = np.copy (origtune)
+  i = 0                                         # position to search for polyphony
+  while i < len (tune):
+    e = i                                       # probe for 0-step notes following i
+    while e+1 < len (tune) and tune[e+1][2] == 0:
+      e += 1
+    if e > i:                                   # e is last index of 0-step subsequence
+      note = tune[i]                            # collapse into position i
+      poly = tune[i:e+1]                        # polyphony subsequence
+      for p, d, s in poly:
+        note[0] = max (note[0], p)              # pick remaining pitch
+        note[1] = max (note[1], d)              # pick longest duration
+      tune = np.delete (tune, np.arange (i, e), axis = 0)
+      tune[i,:] = note
+    i += 1
+  return tune
