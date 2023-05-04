@@ -149,3 +149,30 @@ def analyze_midi (mfile, iset, xset, dedup, verbose):
   attrs['notemax'] = notemax
   attrs['notespan'] = notemax - notemin + 1
   return npvec, attrs
+
+# == count_pitches ==
+def pitch_stats (tune):
+  pitches = [int (p) for p,d,s in tune]
+  tc = collections.Counter (pitches)
+  return tc, pitches
+
+# == tune_stats ==
+def tune_stats (tune):
+  tc, pitches = pitch_stats (tune)
+  min_note = int (min (tc.keys()))
+  max_note = int (max (tc.keys()))
+  avg_note = round (0.5 * (min_note + max_note))
+  occurrence = list (tc.values())
+  avg_occurrence = sum (occurrence) / len (occurrence)
+  min_occurrence = min (occurrence)
+  max_occurrence = max (occurrence)
+  semitones = np.histogram ([p % 12 for p,d,s in tune], bins = range (12 + 1))[0]
+  tonica = np.argmax (semitones)
+  return Bunch (min_note = min_note,
+                max_note = max_note,
+                avg_note = avg_note,
+                min_occurrence = min_occurrence,
+                max_occurrence = max_occurrence,
+                avg_occurrence = avg_occurrence,
+                tonica = tonica,
+                semitones = semitones)
