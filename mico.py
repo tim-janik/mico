@@ -22,7 +22,7 @@ CONFIG = util.Bunch (
   collect = [],
   verbose = 0,
   parse_collected = False,
-  reduce_polypony = False,
+  monophonic_notes = False,
   contiguous_notes = False,
   transpose_to_c = False,
 )
@@ -35,9 +35,9 @@ def _parse_options ():
   a ('--dump', type = str, default = CONFIG.dump, help = "Dump MIDI file events")
   a ('--play', type = str, default = CONFIG.play, help = "Play a MIDI file")
   a ('--parse-collected', default = CONFIG.parse_collected, action = 'store_true', help = "Dump collected files")
-  a ('--reduce-polypony', default = CONFIG.reduce_polypony, action = 'store_true', help = "Dump collected files")
-  a ('--contiguous-notes', default = CONFIG.contiguous_notes, action = 'store_true', help = "Dump collected files")
-  a ('--transpose-to-c', default = CONFIG.transpose_to_c, action = 'store_true', help = "Dump collected files")
+  a ('--monophonic-notes', default = CONFIG.monophonic_notes, action = 'store_true', help = "Remove polyphonic notes (keeping the lead)")
+  a ('--contiguous-notes', default = CONFIG.contiguous_notes, action = 'store_true', help = "Remove pauses and staccato")
+  a ('--transpose-to-c', default = CONFIG.transpose_to_c, action = 'store_true', help = "Transpose tunes into C")
   a ('--extension', default = CONFIG.extension, action = 'append', help = "Only collect files matching extension")
   a ('-v', '--verbose', default = CONFIG.verbose, action = 'store_true', dest = 'verbose',
      help = "Increase output messages or debugging info")
@@ -59,8 +59,8 @@ class MidiTune:
     return s
   def contiguous_notes (self, min_duration = 1 / 8, max_duration = 99e99):
     return MidiTune ('', pmidi.contiguous_notes (self.notes, min_duration, max_duration))
-  def reduce_polypony (self):
-    return MidiTune ('', pmidi.reduce_polypony (self.notes))
+  def monophonic_notes (self):
+    return MidiTune ('', pmidi.monophonic_notes (self.notes))
   def transpose_to_c (self):
     return MidiTune ('', pmidi.transpose_to_c (self.notes))
 
@@ -98,8 +98,8 @@ def _main (argv):
     if CONFIG.parse_collected:
       for tune in parse_midi (collected):
         print (tune.filename + ':', tune)
-        if CONFIG.reduce_polypony:
-          tune = tune.reduce_polypony()
+        if CONFIG.monophonic_notes:
+          tune = tune.monophonic_notes()
         if CONFIG.contiguous_notes:
           tune = tune.contiguous_notes()
         if CONFIG.transpose_to_c:
