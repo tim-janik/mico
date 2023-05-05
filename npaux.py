@@ -40,3 +40,19 @@ def make_rows_unique (array, duparray = None):
   unique_indices = sorted (unique_indices)                      # reconstruct original order
   array = array[unique_indices]
   return array
+
+# == reweight_distribution ==
+# Adjust entropy of a softmax distribution with temperature, use values > 1.0 to increase.
+def reweight_distribution (normalized_dist, temperature):
+  # use masked array to ignore values <= 0
+  distribution = np.ma.log (normalized_dist) / temperature
+  distribution = np.exp (distribution)
+  # restore 0.0 in masked array
+  distribution.data[distribution.mask] = 0
+  distribution = distribution.data
+  # renormalize if not 0.0
+  dsum = np.sum (distribution)
+  if dsum > 0.0:
+    distribution = distribution / dsum
+  return distribution
+assert ((abs (reweight_distribution ([0.4,0.6], 1.1) -0.5) < 0.092).all())
