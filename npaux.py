@@ -19,3 +19,12 @@ def sequence_segmentation (sequence, segment_length, prefix = None):
 assert np.prod (sequence_segmentation (10 + np.arange (5), 4, -1) ==    # [10, 11, 12, 13, 14]
                 np.array ([[-1, -1, -1, 10], [-1, -1, 10, 11],
                            [-1, 10, 11, 12], [10, 11, 12, 13], [11, 12, 13, 14]]))
+
+# == sequence_list_segmentation ==
+# Generate all segments of given length from a list of sequences
+def sequence_list_segmentation (sequence_list, segment_length, prefix = None):
+  all_segments = []
+  for j, sequence in enumerate (sequence_list):
+    segments = sequence_segmentation (sequence, segment_length, prefix)
+    all_segments += segments
+  return np.stack (all_segments, axis = 0)
