@@ -28,3 +28,15 @@ def sequence_list_segmentation (sequence_list, segment_length, prefix = None):
     segments = sequence_segmentation (sequence, segment_length, prefix)
     all_segments += segments
   return np.stack (all_segments, axis = 0)
+
+# == make_rows_unique ==
+# Remove non-unique rows from `array`, possibly inspecting `duparray` to determine uniqueness.
+def make_rows_unique (array, duparray = None):
+  array = np.array (array)
+  duparray = array if duparray is None else np.array (duparray)
+  assert array.shape[0] == duparray.shape[0]
+  unique_rows, unique_indices = np.unique (duparray, axis = 0, return_index = True)
+  del unique_rows
+  unique_indices = sorted (unique_indices)                      # reconstruct original order
+  array = array[unique_indices]
+  return array
