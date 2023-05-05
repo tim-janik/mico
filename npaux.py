@@ -56,3 +56,15 @@ def reweight_distribution (normalized_dist, temperature):
     distribution = distribution / dsum
   return distribution
 assert ((abs (reweight_distribution ([0.4,0.6], 1.1) -0.5) < 0.092).all())
+
+# == top_k_filter ==
+# Assign `filler` to all elements in `array` except for the top-k.
+def top_k_filter (array, k, filler = 0):
+  # See: https://stackoverflow.com/questions/65038206/how-to-get-indices-of-top-k-values-from-a-numpy-array/75381393#75381393
+  array = np.copy (array)
+  if k < len (array):
+    partition = np.argpartition (array, -k) # partition around [len-k]
+    not_k_indices = partition[:-k]          # k_indices = [-k:]
+    array[not_k_indices] = filler
+  return array
+assert (top_k_filter ([9,1,3,7,5,4], 3) == [9,0,0,7,5,0]).all()
