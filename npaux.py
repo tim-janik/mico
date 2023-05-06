@@ -68,3 +68,23 @@ def top_k_filter (array, k, filler = 0):
     array[not_k_indices] = filler
   return array
 assert (top_k_filter ([9,1,3,7,5,4], 3) == [9,0,0,7,5,0]).all()
+
+# == top_p_filter ==
+# Assign `filler` to all elements in `array` except for the top elements exceeding cumulative probability `p`.
+# This results in a distribution for "Nucleus Sampling". See: https://arxiv.org/pdf/1904.09751.pdf
+def top_p_filter (array, p, filler = 0):
+  array = np.copy (array)
+  if p >= 1.0:
+    return array
+  L = len (array)
+  descending_indices = np.argsort (-array)              # Indices for descending array values
+  unsort_indices = np.zeros (L, dtype = int)            # Prepare to reassociate masking of sorted values
+  unsort_indices[descending_indices] = np.arange (L)    # Assign indices to map back into unsorted array
+  cumulative_sums = np.cumsum (array[descending_indices])
+  mask_below_p = cumulative_sums < p                    # True for cumulative probs, one short of reaching p
+  mask_above_p = np.roll (mask_below_p, +1)             # Shift by one to include probability to exceed p
+  mask_above_p[0] = p > 0                               # Fix up first field that became False due to roll
+  array_mask = mask_above_p[unsort_indices]             # Reorder mask to apply to unsorted array
+  array[~array_mask] = filler                           # Reset unwanted probs with filler
+  return array
+assert (top_p_filter ([0.2,0.0,0.1,0.4,0.3,0], 0.75) == [0.2, 0, 0, 0.4, 0.3, 0.0]).all()
