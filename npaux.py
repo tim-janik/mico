@@ -88,3 +88,16 @@ def top_p_filter (array, p, filler = 0):
   array[~array_mask] = filler                           # Reset unwanted probs with filler
   return array
 assert (top_p_filter ([0.2,0.0,0.1,0.4,0.3,0], 0.75) == [0.2, 0, 0, 0.4, 0.3, 0.0]).all()
+
+# == sample_probabilities ==
+# Sample from a probability distribution with variable temperature and repetittion penalty.
+def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 1.25, penalty_decay = 0.95):
+  probs = np.array (probs, dtype = np.float64)
+  for t in reversed (last_tokens):
+    if repeat_penalty <= 1.0: break
+    probs[t] /= repeat_penalty
+    repeat_penalty *= penalty_decay
+  dist = np.exp (np.log (probs) / temp)
+  dist /= np.sum (dist)
+  sample = np.argmax (np.random.multinomial (1, dist))
+  return sample
