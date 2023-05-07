@@ -12,10 +12,10 @@ import pmidi, mido
 import util
 
 # == pmidi.py exports ==
-from pmidi import pitch_name, gm_instrument_name, tune_stats, plot_pitch_hist, plot_semitone_hist, play_notes
+from pmidi import pitch_name, gm_instrument_name, tune_stats, plot_pitch_hist, plot_semitone_hist, play_notes, create_midifile
 
 # == npaux.py exports ==
-from npaux import sequence_segmentation, sequence_list_segmentation, make_rows_unique
+from npaux import *
 
 # == CONFIG ==
 CONFIG = util.Bunch (
@@ -26,6 +26,7 @@ CONFIG = util.Bunch (
   monophonic_notes = False,
   parse_collected = False,
   play = "",
+  randmidi = "",
   transpose_to_c = False,
   verbose = 0,
 )
@@ -41,6 +42,7 @@ def _parse_options ():
   a ('--monophonic-notes', default = CONFIG.monophonic_notes, action = 'store_true', help = "Remove polyphonic notes (keeping the lead)")
   a ('--parse-collected', default = CONFIG.parse_collected, action = 'store_true', help = "Dump collected files")
   a ('--play', type = str, default = CONFIG.play, help = "Play a MIDI file")
+  a ('--randmidi', type = str, default = CONFIG.randmidi, help = "Generate a random MIDI file")
   a ('--transpose-to-c', default = CONFIG.transpose_to_c, action = 'store_true', help = "Transpose tunes into C")
   a ('-v', '--verbose', default = CONFIG.verbose, action = 'store_true', dest = 'verbose',
      help = "Increase output messages or debugging info")
@@ -86,6 +88,29 @@ def parse_midi (filenames, dedup = True):
 def collect (root, extension = None):
   return sorted (util.collect_files (root, extension))
 
+# == albrecht_weights ==
+# Krumhansl, Carol L., 1990, "Cognitive Foundations of Musical Pitch", Oxford.
+krumhansl_major_key_weights = [ 6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88 ]
+krumhansl_major_key_weights = krumhansl_major_key_weights / np.sum (krumhansl_major_key_weights)
+
+# == random_midi ==
+def random_midi (randmidi):
+  tune, last_tokens, next_step = [], [], 0
+  N = 10000
+  for i in range (N):
+    probs = krumhansl_major_key_weights
+    # probs = top_p_filter (probs, 0.7)
+    semitone = sample_probabilities (probs, temp = 0.1, last_tokens = last_tokens)
+    last_tokens.append (semitone)
+    octave = 1 + sample_probabilities (softmax ([ 1, 1, 1, 1, 1, 1, 1, 1 ]), temp = 1.0)
+    duration = 0.27
+    midipitch = octave * 12 + semitone
+    note = [ midipitch, duration, next_step ]
+    tune.append (note)
+    next_step = duration
+  create_midifile (randmidi, tune, 120)
+  print (["%.2f" % v for v in np.histogram (last_tokens, bins = 12, range = (0, 12))[0]])
+
 # == main ==
 def _main (argv):
   global CONFIG, midi_files, dataset_base, dataset_csv, dataset_hdf5
@@ -96,6 +121,8 @@ def _main (argv):
   if CONFIG.play:
     miditune = list (parse_midi (CONFIG.play))[0]
     play_notes (miditune.notes, miditune.bpm, CONFIG.verbose)
+  if CONFIG.randmidi:
+    random_midi (CONFIG.randmidi)
   if CONFIG.collect:
     collected = collect (CONFIG.collect, CONFIG.extension)
     if CONFIG.parse_collected:
