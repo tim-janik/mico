@@ -19,15 +19,15 @@ from npaux import sequence_segmentation, sequence_list_segmentation, make_rows_u
 
 # == CONFIG ==
 CONFIG = util.Bunch (
-  dump = "",
-  play = "",
-  extension = [],
   collect = [],
-  verbose = 0,
-  parse_collected = False,
-  monophonic_notes = False,
   contiguous_notes = False,
+  dump = "",
+  extension = [],
+  monophonic_notes = False,
+  parse_collected = False,
+  play = "",
   transpose_to_c = False,
+  verbose = 0,
 )
 
 # == parse_options ==
