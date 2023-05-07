@@ -294,6 +294,15 @@ def create_midifile (filename, midinotes, bpm = None, verbose = False):
     track.append (mido.Message (mtype, **md))
   mid.save (filename)
 
+# == pitch_name ==
+def pitch_name (pitch, other = '.'):
+  if pitch < 0 or pitch > 127:
+    return other
+  name = MIDI_PITCH_SEMITONE_NAMES[pitch % 12]
+  name += '%u' % (pitch // 12 - 1)
+  return name
+MIDI_PITCH_SEMITONE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
 # == gm_instrument_name ==
 def gm_instrument_name (i):
   return GENERAL_MIDI_LEVEL1_INSTRUMENT_PATCH_MAP[i] if i >= 0 and i <= 127 else ''
