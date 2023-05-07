@@ -12,7 +12,10 @@ import pmidi, mido
 import util
 
 # == pmidi.py exports ==
-from pmidi import tune_stats, plot_pitch_hist, plot_semitone_hist, play_notes
+from pmidi import pitch_name, gm_instrument_name, tune_stats, plot_pitch_hist, plot_semitone_hist, play_notes
+
+# == npaux.py exports ==
+from npaux import sequence_segmentation, sequence_list_segmentation, make_rows_unique
 
 # == CONFIG ==
 CONFIG = util.Bunch (
@@ -32,13 +35,13 @@ def _parse_options ():
   p = argparse.ArgumentParser (description = __doc__)
   a = p.add_argument
   a ('--collect', default = CONFIG.collect, action = 'append', help = "Collect files recursively")
-  a ('--dump', type = str, default = CONFIG.dump, help = "Dump MIDI file events")
-  a ('--play', type = str, default = CONFIG.play, help = "Play a MIDI file")
-  a ('--parse-collected', default = CONFIG.parse_collected, action = 'store_true', help = "Dump collected files")
-  a ('--monophonic-notes', default = CONFIG.monophonic_notes, action = 'store_true', help = "Remove polyphonic notes (keeping the lead)")
   a ('--contiguous-notes', default = CONFIG.contiguous_notes, action = 'store_true', help = "Remove pauses and staccato")
-  a ('--transpose-to-c', default = CONFIG.transpose_to_c, action = 'store_true', help = "Transpose tunes into C")
+  a ('--dump', type = str, default = CONFIG.dump, help = "Dump MIDI file events")
   a ('--extension', default = CONFIG.extension, action = 'append', help = "Only collect files matching extension")
+  a ('--monophonic-notes', default = CONFIG.monophonic_notes, action = 'store_true', help = "Remove polyphonic notes (keeping the lead)")
+  a ('--parse-collected', default = CONFIG.parse_collected, action = 'store_true', help = "Dump collected files")
+  a ('--play', type = str, default = CONFIG.play, help = "Play a MIDI file")
+  a ('--transpose-to-c', default = CONFIG.transpose_to_c, action = 'store_true', help = "Transpose tunes into C")
   a ('-v', '--verbose', default = CONFIG.verbose, action = 'store_true', dest = 'verbose',
      help = "Increase output messages or debugging info")
   return p.parse_args()
