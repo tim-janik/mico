@@ -89,6 +89,12 @@ def top_p_filter (array, p, filler = 0):
   return array
 assert (top_p_filter ([0.2,0.0,0.1,0.4,0.3,0], 0.75) == [0.2, 0, 0, 0.4, 0.3, 0.0]).all()
 
+# == softmax ==
+def softmax (vec):
+  exp_vec = np.exp (vec)
+  softmax_dist = exp_vec / sum (exp_vec)
+  return softmax_dist
+
 # == sample_probabilities ==
 # Sample from a probability distribution with variable temperature and repetittion penalty.
 def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 1.25, penalty_decay = 0.95):
