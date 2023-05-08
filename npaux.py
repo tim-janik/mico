@@ -97,7 +97,7 @@ def softmax (vec):
 
 # == sample_probabilities ==
 # Sample from a probability distribution with variable temperature and repetittion penalty.
-def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 1.25, penalty_decay = 0.95):
+def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 1.2, penalty_decay = 0.98765):
   probs = np.array (probs, dtype = np.float64)
   for t in reversed (last_tokens):
     if repeat_penalty <= 1.0: break
@@ -106,4 +106,17 @@ def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 
   dist = np.exp (np.log (probs) / temp)
   dist /= np.sum (dist)
   sample = np.argmax (np.random.multinomial (1, dist))
+  return sample
+
+# == sample_greedy ==
+# Greedy sampling from a probability distribution with repetittion penalty.
+def sample_greedy (probs, last_tokens = [], repeat_penalty = 1.2, penalty_decay = 0.98765):
+  probs = np.array (probs, dtype = np.float64)
+  for t in reversed (last_tokens):
+    if repeat_penalty <= 1.0: break
+    probs[t] /= repeat_penalty
+    repeat_penalty *= penalty_decay
+  dist = probs
+  # dist /= np.sum (dist)       # normalization is not needed for argmax
+  sample = np.argmax (dist)
   return sample
