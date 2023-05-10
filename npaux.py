@@ -41,6 +41,13 @@ def make_rows_unique (array, duparray = None):
   array = array[unique_indices]
   return array
 
+# == softmax ==
+def softmax (vec):
+  vec = np.asarray (vec, dtype = np.float64)
+  exp_vec = np.exp (vec)
+  softmax_dist = exp_vec / sum (exp_vec)
+  return softmax_dist
+
 # == reweight_distribution ==
 # Adjust entropy of a softmax distribution with temperature, use values > 1.0 to increase.
 def reweight_distribution (normalized_dist, temperature):
@@ -88,12 +95,6 @@ def top_p_filter (probs, p, filler = 0):
   probs[~array_mask] = filler                           # Reset unwanted logits with filler
   return probs
 assert (top_p_filter ([.2, 0, .1, .4, .3, 0], 0.75) == [0.2, 0, 0, 0.4, 0.3, 0.0]).all()
-
-# == softmax ==
-def softmax (vec):
-  exp_vec = np.exp (vec)
-  softmax_dist = exp_vec / sum (exp_vec)
-  return softmax_dist
 
 # == sample_probabilities ==
 # Sample from a probability distribution with variable temperature and repetittion penalty.
