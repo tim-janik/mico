@@ -121,13 +121,13 @@ def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 
 
 # == sample_greedy ==
 # Greedy sampling from a probability distribution with repetittion penalty.
-def sample_greedy (probs, last_tokens = [], repeat_penalty = 1.2, penalty_decay = 0.98765):
+def sample_greedy (probs, last_tokens = [], repeat_penalty = 1, penalty_steps = 8):
   probs = np.array (probs, dtype = np.float64)
+  decay = penalty_decay (repeat_penalty, penalty_steps)
   for t in reversed (last_tokens):
     if repeat_penalty <= 1.0: break
     probs[t] /= repeat_penalty
-    repeat_penalty *= penalty_decay
-  dist = probs
-  # dist /= np.sum (dist)       # normalization is not needed for argmax
-  sample = np.argmax (dist)
+    repeat_penalty *= decay
+  # probs /= np.sum (probs)             # normalization is not needed for argmax
+  sample = np.argmax (probs)
   return sample
