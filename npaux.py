@@ -99,7 +99,10 @@ assert (top_p_filter ([.2, 0, .1, .4, .3, 0], 0.75) == [0.2, 0, 0, 0.4, 0.3, 0.0
 # == penalty_decay ==
 # Calculate decay, so repeat_penalty becomes 1.0 after penalty_steps.
 def penalty_decay (repeat_penalty, penalty_steps):
-  decay = (1.0 / repeat_penalty) ** (1.0 / penalty_steps)
+  if penalty_steps > 0:
+    decay = (1.0 / repeat_penalty) ** (1.0 / penalty_steps)
+  else:
+    decay = 0
   return decay
 
 # == sample_probabilities ==
