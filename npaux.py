@@ -96,6 +96,12 @@ def top_p_filter (probs, p, filler = 0):
   return probs
 assert (top_p_filter ([.2, 0, .1, .4, .3, 0], 0.75) == [0.2, 0, 0, 0.4, 0.3, 0.0]).all()
 
+# == penalty_decay ==
+# Calculate decay, so repeat_penalty becomes 1.0 after penalty_steps.
+def penalty_decay (repeat_penalty, penalty_steps):
+  decay = (1.0 / repeat_penalty) ** (1.0 / penalty_steps)
+  return decay
+
 # == sample_probabilities ==
 # Sample from a probability distribution with variable temperature and repetittion penalty.
 def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 1.2, penalty_decay = 0.98765):
