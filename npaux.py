@@ -104,13 +104,17 @@ def penalty_decay (repeat_penalty, penalty_steps):
 
 # == sample_probabilities ==
 # Sample from a probability distribution with variable temperature and repetittion penalty.
-def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 1.2, penalty_decay = 0.98765):
+def sample_probabilities (probs, temp = 1.0, last_tokens = [], repeat_penalty = 1.2, penalty_steps = 8):
   probs = np.array (probs, dtype = np.float64)
+  decay = penalty_decay (repeat_penalty, penalty_steps)
   for t in reversed (last_tokens):
     if repeat_penalty <= 1.0: break
     probs[t] /= repeat_penalty
-    repeat_penalty *= penalty_decay
-  dist = np.exp (np.log (probs) / temp)
+    repeat_penalty *= decay
+  if temp != 1.0:
+    dist = np.exp (np.log (probs) / temp)
+  else:
+    dist = probs
   dist /= np.sum (dist)
   sample = np.argmax (np.random.multinomial (1, dist))
   return sample
