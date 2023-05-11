@@ -134,3 +134,76 @@ def sample_greedy (probs, last_tokens = [], repeat_penalty = 1, penalty_steps = 
   # probs /= np.sum (probs)             # normalization is not needed for argmax
   sample = np.argmax (probs)
   return sample
+
+# == Mirostat2.sample ==
+# Mirostat sampling from a probability distribution.
+# This is a variant of Mirostat 2 that adds temperature weighting and decaying repetition
+# penalties. It also includes extra guards needed only by small models or vocabularies.
+class Mirostat2:
+  def __init__ (self, temp = 1.0, tau = 3.0, learning_rate = 0.1,
+                repeat_penalty = 1, penalty_steps = 8):
+    self.temperature = temp
+    self.repeat_penalty = repeat_penalty
+    self.penalty_decay = penalty_decay (repeat_penalty, penalty_steps)
+    self.target_cross_entropy = tau                     # τ
+    self.learning_rate = learning_rate                  # η
+    self.maximum_cross_entropy = 2 * tau                # μ
+    self.cross_entropy_total = 0
+    self.cross_entropy_count = 0
+    # Note, learning rates > 0.5 can cause very abrupt cut-offs for
+    # logits close to tau (high temperature), truncating *all* words
+  def average_cross_entropy (self):
+    return self.cross_entropy_total / max (1, self.cross_entropy_count)
+  def sample (self, probs, last_tokens = []):
+    orig_probs = probs
+    probs = np.array (probs, dtype = np.float64)
+    mu = self.maximum_cross_entropy                     # μ
+
+    # Determine model dependent maximum bound for cross entropy
+    max_orig_tau = -np.log2 (min (orig_probs))
+
+    # Apply repetition penalties with decay
+    repeat_penalty = self.repeat_penalty
+    for t in reversed (last_tokens):
+      if repeat_penalty <= 1.0: break
+      probs[t] /= repeat_penalty
+      repeat_penalty *= self.penalty_decay              # Normalization needed
+
+    # Reweight by temperature
+    if self.temperature != 1.0:
+      probs = np.exp (np.log (probs) / self.temperature)
+    if self.temperature != 1.0 or last_tokens:
+      probs /= np.sum (probs)                           # Renormalize
+
+    # Sort inputs in descending order of surprise values
+    descending_indices = np.argsort (-probs)            # Indices for inputs in descending order
+    sorted_probs = probs[descending_indices]            # Probability distribution of sorted inputs
+
+    # Truncate the words with surprise values greater than μ
+    # - Use log2 for "surprise" calculation because formula (2) in the paper relates τ to base 2
+    #   via the term 2**μ, i.e. 2^2τ and the mirostat sample code also uses
+    #   `surprise = log2 (1 / token_probability)`
+    mu_excess_mask = -np.log2 (sorted_probs) > mu       # [ False, True for unwanted values ]
+    mu_excess_mask[0] = False                           # Guard against abrupt cut-offs
+    masked_probs = np.copy (sorted_probs)
+    masked_probs[mu_excess_mask] = 0                    # Zero out sorted_probs with surprise > μ
+
+    # Normalize the probabilities of the remaining words
+    masked_probs /= np.sum (masked_probs)               # Same as softmax of truncated logits
+
+    # Sample the next word X from the remaining words
+    sorted_sample = np.argmax (np.random.multinomial (1, masked_probs))
+    sample = descending_indices[sorted_sample]          # Index of sampled inputs
+
+    # Compute error: e = S(X) − τ
+    sample_surprise = -np.log2 (masked_probs[sorted_sample])
+    surprise_error = sample_surprise - self.target_cross_entropy
+
+    # Update μ: μ = μ − ηe
+    # Constrain μ with max_orig_tau to avoid excess accumulation when
+    # τ is larger than the surprise values the model can generate
+    self.maximum_cross_entropy = min (max_orig_tau, mu - self.learning_rate * surprise_error)
+    self.cross_entropy_total += -np.log2 (orig_probs[sample])
+    self.cross_entropy_count += 1
+
+    return sample
