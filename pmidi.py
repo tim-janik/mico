@@ -198,6 +198,26 @@ def plot_semitone_hist (splt, tune):
     splt.axvline (x = o + 0.5, linestyle = ':', linewidth = 2, color = color)
   splt.hist (semitones, bins = range (12 + 1), rwidth = 0.92)
 
+# == quantize_durations ==
+def quantize_durations (durations):
+  ix = np.arange (len (duration_list) - 1)                      # pair indices
+  edges = 0.5 * (duration_list[ix] + duration_list[ix + 1])     # values *between* durations
+  quantized_indices = np.digitize (durations, edges)
+  return duration_list[quantized_indices]                       # durations quantized to duration_list
+duration_list = 4 * np.array ([ 1/16, 1.5/16, 1/8, 1.5/8, 1/4, 1.5/4, 1/2, 1.5/2, 1/1])
+duration_names = [ '16', '16.', '8', '8.', '4', '4.', '2', '2.', '1' ]
+
+# == plot_duration_hist ==
+def plot_duration_hist (splt, tune):
+  durations = [d for p,d,s in tune]
+  hist = np.histogram (durations, bins = [0] + (duration_list + 0.007).tolist())
+  splt.set_xlabel ("Durations")
+  splt.set_ylabel ("Occurrence of Durations")
+  xs = np.arange (len (duration_list))
+  splt.bar (xs, hist[0])
+  splt.set_xticks (xs, duration_names)
+  return hist
+
 # == VoiceOffAllocator ==
 class VoiceOffAllocator:
   def __init__ (self):
