@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # This Source Code Form is licensed MPL-2.0: http://mozilla.org/MPL/2.0
+import os, subprocess, tempfile
 import collections, mido
 import numpy as np
 from util import Bunch
@@ -100,7 +101,7 @@ def notes_to_vector (midi_notes, verbose):
   for nn in midi_notes:
     iprograms.add (nn.program)
     step = nn.tick - last_tick
-    # assert step >= 0
+    assert step >= 0
     last_tick = nn.tick
     add_note (nn.pitch, nn.quarter_length (nn.duration), nn.quarter_length (step))
     if 0:
@@ -136,29 +137,22 @@ def analyze_midi (mfile, iset, xset, dedup, verbose):
   midi_notes = sorted (midi_notes, key = lambda nn: (nn.tick, nn.pitch, nn.channel, -nn.duration, nn.track))
   # create vector
   nnotes, nchords, npvec = notes_to_vector (midi_notes, verbose = verbose)
-  # minmax
-  notemin, notemax = 128, -1
-  for nv in npvec:
-    notemin = min (notemin, nv[0])
-    notemax = max (notemax, nv[0])
   # collect attrs
   attrs['bpm'] = nc.bpm
   attrs['nnotes'] = nnotes
   attrs['nchords'] = nchords
-  attrs['notemin'] = notemin
-  attrs['notemax'] = notemax
-  attrs['notespan'] = notemax - notemin + 1
   return npvec, attrs
 
 # == count_pitches ==
 def pitch_stats (tune):
-  pitches = [int (p) for p,d,s in tune]
+  pitches = [int (pitchtuple[0]) for pitchtuple in tune]
   tc = collections.Counter (pitches)
   return tc, pitches
 
 # == tune_stats ==
 def tune_stats (tune):
   tc, pitches = pitch_stats (tune)
+  note_count = len (tune)
   min_note = int (min (tc.keys()))
   max_note = int (max (tc.keys()))
   avg_note = round (0.5 * (min_note + max_note))
@@ -168,7 +162,8 @@ def tune_stats (tune):
   max_occurrence = max (occurrence)
   semitones = np.histogram ([p % 12 for p,d,s in tune], bins = range (12 + 1))[0]
   tonica = np.argmax (semitones)
-  return Bunch (min_note = min_note,
+  return Bunch (note_count = note_count,
+                min_note = min_note,
                 max_note = max_note,
                 avg_note = avg_note,
                 min_occurrence = min_occurrence,
@@ -176,6 +171,157 @@ def tune_stats (tune):
                 avg_occurrence = avg_occurrence,
                 tonica = tonica,
                 semitones = semitones)
+
+# == plot_pitch_hist ==
+def plot_pitch_hist (splt, tune):
+  tc, pitches = pitch_stats (tune)
+  tstats = tune_stats (tune)
+  for o in np.arange (11) * 12:
+    splt.axvline (x = o, linestyle = ':', color = "#dddddd")
+  splt.axhline (y = tstats.avg_occurrence, linestyle = '--', color = "#75bcfe")
+  splt.axvline (x = tstats.avg_note, linestyle = '--', color = "#75bcfe")
+  splt.set_xlabel ("MIDI Pitch")
+  splt.set_ylabel ("Occurrence of Pitches")
+  splt.hist (pitches, bins = range (128 + 1))
+
+# == plot_semitone_hist ==
+def plot_semitone_hist (splt, tune):
+  semitones = [p % 12 for p,d,s in tune]
+  splt.set_xlabel ("Semitones")
+  splt.set_xticks (np.arange (13),
+                   ("       | 0 C", "      1 C#", "     2 D", "      3 D#", "     4 E", "     5 F",
+                    "      6 F#", "     7 G", "      8 G#", "     9 A", "        10 A#", "      11 B",
+                    "|"))
+  splt.set_ylabel ("Occurrence of Semitones")
+  for o in range (12):
+    color = "#333333" if o in [1, 3, 6, 8, 10] else "#dddddd"
+    splt.axvline (x = o + 0.5, linestyle = ':', linewidth = 2, color = color)
+  splt.hist (semitones, bins = range (12 + 1), rwidth = 0.92)
+
+# == quantize_durations ==
+def quantize_durations (durations):
+  ix = np.arange (len (duration_list) - 1)                      # pair indices
+  edges = 0.5 * (duration_list[ix] + duration_list[ix + 1])     # values *between* durations
+  quantized_indices = np.digitize (durations, edges)
+  return duration_list[quantized_indices]                       # durations quantized to duration_list
+duration_list = 4 * np.array ([ 1/16, 1.5/16, 1/8, 1.5/8, 1/4, 1.5/4, 1/2, 1.5/2, 1/1])
+duration_names = [ '16', '16.', '8', '8.', '4', '4.', '2', '2.', '1' ]
+
+# == plot_duration_hist ==
+def plot_duration_hist (splt, tune):
+  durations = [d for p,d,s in tune]
+  hist = np.histogram (durations, bins = [0] + (duration_list + 0.007).tolist())
+  splt.set_xlabel ("Durations")
+  splt.set_ylabel ("Occurrence of Durations")
+  xs = np.arange (len (duration_list))
+  splt.bar (xs, hist[0])
+  splt.set_xticks (xs, duration_names)
+  return hist
+
+# == VoiceOffAllocator ==
+class VoiceOffAllocator:
+  def __init__ (self):
+    self.chvoices = [ {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {} ] # 16
+    self.pos = -1
+  def tick_before_list (self, tick, flist, gap = 0):
+    for offtick in flist:
+      if tick <= offtick + gap:
+        return True
+    return False
+  def check (self, channel, pitch, tick):
+    chdict = self.chvoices[channel]
+    allocs = chdict.get (pitch, [])
+    return self.tick_before_list (tick, allocs)
+  def add_offtick (self, channel, pitch, offtick, ontick, exclusive = False):
+    chdict = self.chvoices[channel]
+    allocs = chdict.get (pitch, None)
+    if not allocs:
+      chdict[pitch] = allocs = []
+    multi = ontick <= offtick
+    multi += self.tick_before_list (ontick, allocs)
+    if multi > 1 and exclusive:
+      return False
+    allocs.append (offtick)
+    return True
+  def add_exclusive (self, channel, pitch, offtick, ontick):
+    return self.add_offtick (channel, pitch, offtick, ontick, exclusive = True)
+  def add_alt (self, channels, pitch, offtick, ontick):
+    for channel in channels:
+      if self.check (channel, pitch, ontick):
+        continue
+      ok = self.add_exclusive (channel, pitch, offtick, ontick)
+      assert ok
+      return channel
+    return -1
+
+# == create_midifile ==
+def create_midifile (filename, midinotes, bpm = None, verbose = False):
+  # create MIDI file, track, tempo
+  mid = mido.MidiFile()
+  mid.ticks_per_beat = 960
+  track = mido.MidiTrack()
+  mid.tracks.append (track)
+  if bpm:
+    track.append (mido.MetaMessage ('set_tempo', tempo = mido.bpm2tempo (bpm)))
+  messages = []
+  qtime = 0
+  # create ON + OFF with abs time, check voice allocations
+  alt_channels = [1,2,3,4,5,6,7,8, 10,11,12,13,14,15] # skip drum channel
+  chvoices = VoiceOffAllocator()
+  for mn in midinotes:
+    vpitch, qlen, step = mn
+    qtime += float (step)
+    channel = 0
+    pitch = round (vpitch)
+    ontick = round (qtime * mid.ticks_per_beat)
+    offtick = max (ontick + 1, round ((qtime + qlen) * mid.ticks_per_beat))
+    ok = chvoices.add_exclusive (channel, pitch, offtick, ontick)
+    if not ok:
+      channel = chvoices.add_alt (alt_channels, pitch, offtick, ontick)
+      if channel < 0:
+        print ("Lacking voice for note:", pitch, offtick - ontick, ontick)
+        channel = 0
+        continue
+    md = { 'channel': channel, 'note': pitch, 'type': 'note_on', 'velocity': 127, 'time': ontick }
+    messages.append (md)
+    md = { 'channel': channel, 'note': pitch, 'type': 'note_off', 'velocity': 0, 'time': offtick }
+    messages.append (md)
+    channel = 0
+  # sort by tick, OFF before ON, velocity 0 first
+  messages = sorted (messages, key = lambda md: (md['time'], md['type'], md['velocity']))
+  # create delta times
+  mtime = 0
+  for md in messages:
+    md['time'] -= mtime
+    mtime += md['time']
+  # count voice allocations
+  if verbose:
+    chvoices = [ {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {} ] # 16
+    maxtones = 0
+    for md in messages:
+      ckey = md['channel']
+      pkey = md['note'] # pitch
+      if md['type'] == 'note_off':
+        chvoices[ckey][pkey] -= 1
+      if md['type'] == 'note_on':
+        chvoices[ckey][pkey] = chvoices[ckey].get (pkey, 0) + 1
+        maxtones = max (maxtones, chvoices[ckey][pkey])
+    print (f"{filename}: max voice allocs:", maxtones)
+  # turn events into mido.Message
+  for md in messages:
+    mtype = md['type']
+    del md['type']
+    track.append (mido.Message (mtype, **md))
+  mid.save (filename)
+
+# == pitch_name ==
+def pitch_name (pitch, other = '.'):
+  if pitch < 0 or pitch > 127:
+    return other
+  name = MIDI_PITCH_SEMITONE_NAMES[pitch % 12]
+  name += '%u' % (pitch // 12 - 1)
+  return name
+MIDI_PITCH_SEMITONE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 # == gm_instrument_name ==
 def gm_instrument_name (i):
@@ -218,9 +364,9 @@ GENERAL_MIDI_LEVEL1_INSTRUMENT_PATCH_MAP = [
   "Guitar Fret Noise", "Breath Noise", "Seashore", "Bird Tweet", "Telephone Ring", "Helicopter", "Applause", "Gunshot",
 ]
 
-# == reduce_polypony ==
+# == monophonic_notes ==
 # Reduce polyphonic notes by removing notes to retain a monophonic tune.
-def reduce_polypony (origtune):
+def monophonic_notes (origtune):
   tune = np.copy (origtune)
   i = 0                                         # position to search for polyphony
   while i < len (tune):
@@ -274,3 +420,28 @@ def transpose_to_c (origtune):
       if pitch > 127: pitch -= 12                               # constrain to MIDI range
       tune[i][0] = pitch
   return tune
+
+# == pds_array ==
+# Convert `tones` into a numpy.array with `(pitch, duration, step)` elements.
+def pds_array (tones):
+  tones = np.array (tones)
+  if tones.shape[1] == 2:                                       # need to add step to note + duration
+    assert 0
+    tones = np.pad (tones, ((0,0),(0,1)), constant_values = 0)  # (None,2) -> (None,3)
+    ld = 0
+    for i,(p,d,s) in enumerate (tones):
+      tones[i][2] = ld                                          # assign last duration to following step
+      ld = d
+  return tones
+
+# == play_notes ==
+def play_notes (notes, bpm = 120, verbose = False):
+  notes = pds_array (notes)
+  tmpfile = tempfile.NamedTemporaryFile (prefix = 'pmidi.', suffix = '.mid', delete = False)
+  tmpfile.close()
+  tmpmid = tmpfile.name
+  create_midifile (tmpmid, notes, bpm, verbose)
+  try:
+    subprocess.run (['timidity', '-ia', tmpmid])
+  finally:
+    os.unlink (tmpmid)
