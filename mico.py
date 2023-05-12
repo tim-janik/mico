@@ -12,7 +12,7 @@ import pmidi, mido
 import util
 
 # == pmidi.py exports ==
-from pmidi import pitch_name, gm_instrument_name, tune_stats, plot_pitch_hist, plot_semitone_hist, play_notes, create_midifile
+from pmidi import pitch_name, gm_instrument_name, tune_stats, plot_pitch_hist, plot_semitone_hist, plot_duration_hist, play_notes, create_midifile
 
 # == npaux.py exports ==
 from npaux import *
@@ -68,6 +68,10 @@ class MidiTune:
     return MidiTune ('', pmidi.monophonic_notes (self.notes))
   def transpose_to_c (self):
     return MidiTune ('', pmidi.transpose_to_c (self.notes))
+  def quantize_durations (self):
+    notes = np.copy (self.notes)
+    notes[:,1] = pmidi.quantize_durations (notes[:,1])
+    return MidiTune ('', notes)
 
 # == parse_midis ==
 # Parse and yield a MidiTune object for one or many MIDI files.
@@ -91,25 +95,43 @@ def collect (root, extension = None):
 # == albrecht_weights ==
 # Krumhansl, Carol L., 1990, "Cognitive Foundations of Musical Pitch", Oxford.
 krumhansl_major_key_weights = [ 6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88 ]
-krumhansl_major_key_weights = krumhansl_major_key_weights / np.sum (krumhansl_major_key_weights)
+accidental_weights = [ 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0 ]
 
 # == random_midi ==
 def random_midi (randmidi):
   tune, last_tokens, next_step = [], [], 0
   N = 10000
+  # Mirostat: tau:  2.5    3    4    5
+  # Top-p:    p:    0.56  0.65 0.85 0.95
+  mirostat = Mirostat2 (temp = 1.0, tau = 3, repeat_penalty = 1.45, penalty_steps = 16)
   for i in range (N):
-    probs = krumhansl_major_key_weights
-    # probs = top_p_filter (probs, 0.7)
-    semitone = sample_probabilities (probs, temp = 0.1, last_tokens = last_tokens)
-    last_tokens.append (semitone)
-    octave = 1 + sample_probabilities (softmax ([ 1, 1, 1, 1, 1, 1, 1, 1 ]), temp = 1.0)
+    octave_logits = [ 0.5, 0.95, 1.05, 0.9, 0.4 ]
+    semitone_logits = krumhansl_major_key_weights
+    # Combine ocatve and semitone logits into multi-octave probabilities
+    octave_temp = np.array (octave_logits) / mirostat.temperature
+    multi_probs = np.outer (softmax (octave_temp), softmax (semitone_logits)).flatten()
+    # Logits are a vector of raw (non-normalized) predictions, intended as softmax input
+    if 1:
+      pitch = mirostat.sample (multi_probs, last_tokens = last_tokens)
+    elif 0:
+      pitch = sample_greedy (multi_probs, last_tokens, repeat_penalty = 1.5, penalty_steps = 48)
+    elif 0:
+      pitch = sample_probabilities (top_k_filter (multi_probs, 17), 1.0, last_tokens, repeat_penalty = 1.5)
+    elif 0:
+      pitch = sample_probabilities (top_p_filter (multi_probs, 0.9), 1.0, last_tokens, repeat_penalty = 1)
+    last_tokens.append (pitch)
+    octave = 3 #sample_probabilities (softmax ([ 1, 1, 1, ]), temp = 1.0)
+    midipitch = octave * 12 + pitch
     duration = 0.27
-    midipitch = octave * 12 + semitone
     note = [ midipitch, duration, next_step ]
     tune.append (note)
     next_step = duration
   create_midifile (randmidi, tune, 120)
-  print (["%.2f" % v for v in np.histogram (last_tokens, bins = 12, range = (0, 12))[0]])
+  print ("average_cross_entropy:", mirostat.average_cross_entropy(),
+         "maximum_cross_entropy", mirostat.maximum_cross_entropy)
+  print (["%7.2f" % v for v in np.histogram (np.array (last_tokens) % 12, bins = 12, range = (0, 12))[0]])
+  print (["%7.2f" % (10000*v) for v in softmax (krumhansl_major_key_weights)])
+  print (["%7.2f" % v for v in krumhansl_major_key_weights])
 
 # == main ==
 def _main (argv):
